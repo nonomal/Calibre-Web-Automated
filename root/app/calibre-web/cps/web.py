@@ -385,13 +385,13 @@ def cwa_get_library_location() -> str:
     dirs = {}
     with open('/app/calibre-web-automated/dirs.json', 'r') as f:
         dirs: dict[str, str] = json.load(f)
-    library_dir = f"{dirs['calibre_library_dir']}/"
+    library_dir = dirs['calibre_library_dir']
     return library_dir
 
 def cwa_get_num_books_in_library() -> int:
     try:
         # Path to user's Calibre library's metadata.db
-        db_path = cwa_get_library_location() + "metadata.db"
+        db_path = os.path.join(cwa_get_library_location(), "metadata.db")
         # Connect to the SQLite database
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()

@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import atexit
 from datetime import datetime
+import sqlite3
 
 import pwd
 import grp
@@ -94,6 +95,34 @@ class LibraryConverter:
         self.current_book = 1
         self.ingest_folder, self.library_dir, self.tmp_conversion_dir = self.get_dirs('/app/calibre-web-automated/dirs.json') 
         self.to_convert = self.get_books_to_convert()
+
+        self.calibre_env = os.environ.copy()
+        # Enables Calibre plugins to be used from /config/plugins
+        self.calibre_env["HOME"] = "/config"
+        # Gets split library info from app.db and sets library dir to the split dir if split library is enabled
+        self.split_library = self.get_split_library()
+        if self.split_library:
+            self.library_dir = self.split_library["split_path"]
+            self.calibre_env['CALIBRE_OVERRIDE_DATABASE_PATH'] = os.path.join(self.split_library["db_path"], "metadata.db")
+
+    
+    def get_split_library(self) -> dict[str, str] | None:
+        """Checks whether or not the user has split library enabled. Returns None if they don't and the path of the Split Library location if True."""
+        con = sqlite3.connect("/config/app.db")
+        cur = con.cursor()
+        split_library = cur.execute('SELECT config_calibre_split FROM settings;').fetchone()[0]
+
+        if split_library:
+            split_path = cur.execute('SELECT config_calibre_split_dir FROM settings;').fetchone()[0]
+            db_path = cur.execute('SELECT config_calibre_dir FROM settings;').fetchone()[0]
+            con.close()
+            return {
+                "split_path":split_path,
+                "db_path":db_path
+                }
+        else:
+            con.close()
+            return None
 
 
     def get_dirs(self, dirs_json_path: str) -> tuple[str, str, str]:
@@ -207,6 +236,7 @@ class LibraryConverter:
             try: # Import converted book to library. As of V3.0.0, "add_format" is used instead of "add"
                 with subprocess.Popen(
                     ["calibredb", "add_format", book_id, target_filepath, f"--library-path={self.library_dir}"],
+                    env=self.calibre_env,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.STDOUT,
                     text=True
